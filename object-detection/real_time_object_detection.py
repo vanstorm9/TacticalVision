@@ -35,7 +35,7 @@ net = cv2.dnn.readNetFromCaffe(args["prototxt"], args["model"])
 # initialize the video stream, allow the cammera sensor to warmup,
 # and initialize the FPS counter
 print("[INFO] starting video stream...")
-vs = VideoStream(src=0).start()
+vs = VideoStream(src=1).start()
 time.sleep(2.0)
 fps = FPS().start()
 
@@ -77,6 +77,8 @@ while True:
                         idx = int(detections[0, 0, i, 1])
                         box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
                         (startX, startY, endX, endY) = box.astype("int")
+
+                        print((startX,startY), '   ', (endX,endY))
 
                         # draw the prediction on the frame
                         label = "{}: {:.2f}%".format(CLASSES[idx],
