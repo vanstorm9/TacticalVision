@@ -77,8 +77,13 @@ while True:
                         idx = int(detections[0, 0, i, 1])
                         box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
                         (startX, startY, endX, endY) = box.astype("int")
-
+                        print('-------------------------------------------')
                         print((startX,startY), '   ', (endX,endY))
+                        frameY = frame.shape[0]
+                        frameX = frame.shape[1]
+                        print((startX/frameX , startY/frameY), '   ', (endX/frameX, endY/frameY))
+                        print((5*(startX/frameX) , 5*(startY/frameY)), '   ', (5*(endX/frameX), 5*(endY/frameY)))
+
 
                         # draw the prediction on the frame
                         label = "{}: {:.2f}%".format(CLASSES[idx],
