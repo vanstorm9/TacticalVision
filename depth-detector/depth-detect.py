@@ -15,7 +15,7 @@ window_size = 5                     # wsize default 3; 5; 7 for SGBM reduced siz
 left_matcher = cv2.StereoSGBM_create(
     minDisparity=0,
     numDisparities= 32,             # max_disp has to be dividable by 16 f. E. HH 192, 256
-    blockSize=5,
+    blockSize=10,
     P1=8 * 3 * window_size ** 2,    # wsize default 3; 5; 7 for SGBM reduced size image; 15 for SGBM full size image (1300px and above); 5 Works nicely
     P2=32 * 3 * window_size ** 2,
     disp12MaxDiff=1,
@@ -69,7 +69,6 @@ while(True):
     cv2.imshow('Disparity Map', filteredImg)
     cv2.waitKey(1)
 
-    cv2.imwrite('sampleImg/'+str(i)+'.png',filteredImg)
     i+= 1
     print('Time: ', time()-begin)
 cv2.destroyAllWindows()
