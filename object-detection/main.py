@@ -8,18 +8,29 @@ import numpy as np
 import argparse
 import imutils
 import time
+import math
 import cv2
 
 
-def convertNormToGrid(frame,currDimPer,numOfSec=5):
+subSecNum = 5
+
+grid = [[False for i in range(subSecNum)] for j in range(subSecNum)]
+
+
+
+def convertNormToXPos(frame,currDimPer,numOfSec=5):
+    # Converts normalized coords to X pos
     startX,startY,endX,endY = currDimPer
     startXSec = round(numOfSec*(startX))
-    startYSec = round(numOfSec*(startY))
+    #startYSec = round(numOfSec*(startY))
     endXSec = round(numOfSec*(endX))
-    endYSec = round(numOfSec*(endY))
-    return startXSec, startYSec, endXSec, endYSec
+    #endYSec = round(numOfSec*(endY))
 
-def convertIntoGrid(frame,currDim):
+    return (startXSec, endXSec)
+
+def normalizeCoord(frame,currDim):
+    # Convert bounding box coords to normalized bounding boxCoord
+    # Returns values between 0 ... 1
     startX,startY,endX,endY = currDim
     frameX = frame.shape[1]
     frameY = frame.shape[0]
@@ -28,12 +39,35 @@ def convertIntoGrid(frame,currDim):
     startYPer = startY/frameY
     endXPer = endX/frameX
     endYPer = endY/frameY
-    
 
     #print((startX/frameX , startY/frameY), '   ', (endX/frameX, endY/frameY))
     #print((5*(startX/frameX) , 5*(startY/frameY)), '   ', (5*(endX/frameX), 5*(endY/frameY)))
     return (startXPer, startYPer, endXPer, endYPer)
 
+
+def convertCoordToEntireGrid(grid, frameNormal,frameDepth,coord):
+    # Input full coordinates
+    # Returns a matrix of True and False values
+
+    # Determine row posttion (grid) for each object
+    # Working with depth map
+    startX,startY,endX,endY = coord
+    # We need to split frames based on coordinates
+    crop_depthimg = frameDepth[startY:endY, startX:endX]
+
+    meanVal = np.mean(crop_depthimg)
+
+    # We get the Y grid pos of each object
+    yGridPos = math.floor(5*(meanVal/255))
+
+    # We get the X grid pos of each object        
+    normalizedCoord = convertIntoGrid(frameNormal,coord)
+    startXSec,endXSec = convertNormToXPos(frameNormal,normalizedCoord,5)
+
+    for xGridPos in range(startXSec,endXSec):
+        grid[yGridPos][xGridPos] = True    
+
+    return grid
 
 
 # construct the argument parse and parse the arguments
@@ -104,11 +138,8 @@ while True:
                         box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
                         (startX, startY, endX, endY) = box.astype("int")
                         print('-------------------------------------------')
-                        print((startX,startY), '   ', (endX,endY))
-                        frameY = frame.shape[0]
-                        frameX = frame.shape[1]
-                        print((startX/frameX , startY/frameY), '   ', (endX/frameX, endY/frameY))
-                        print((5*(startX/frameX) , 5*(startY/frameY)), '   ', (5*(endX/frameX), 5*(endY/frameY)))
+
+                        grid = convertCoordToEntireGrid(grid, frameNormal,frameDepth,(startX,startY,endX,endY))
 
 
                         # draw the prediction on the frame
