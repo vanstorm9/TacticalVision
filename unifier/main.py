@@ -11,6 +11,9 @@ import time
 import math
 import cv2
 
+
+skipFrameNum = 20
+
 # Parameters for grid conversion
 subSecNum = 5
 
@@ -24,9 +27,6 @@ lmbda = 80000
 sigma = 1.2
 visual_multiplier = 1.0
  
-wls_filter = cv2.ximgproc.createDisparityWLSFilter(matcher_left=left_matcher)
-wls_filter.setLambda(lmbda)
-wls_filter.setSigmaColor(sigma)
 
 # Initalizations
 grid = [[False for i in range(subSecNum)] for j in range(subSecNum)]
@@ -41,9 +41,9 @@ def printGrid(grid):
 def convertNormToXPos(frame,currDimPer,numOfSec=5):
     # Converts normalized coords to X pos
     startX,startY,endX,endY = currDimPer
-    startXSec = round(numOfSec*(startX))
+    startXSec = int(round(numOfSec*(startX)))
     #startYSec = round(numOfSec*(startY))
-    endXSec = round(numOfSec*(endX))
+    endXSec = int(round(numOfSec*(endX)))
     #endYSec = round(numOfSec*(endY))
 
     return (startXSec, endXSec)
@@ -72,17 +72,25 @@ def convertCoordToEntireGrid(grid, frameNormal,frameDepth,coord):
     # Determine row posttion (grid) for each object
     # Working with depth map
     startX,startY,endX,endY = coord
+
     # We need to split frames based on coordinates
     crop_depthimg = frameDepth[startY:endY, startX:endX]
+
+    if crop_depthimg.shape[0] <= 0 or crop_depthimg.shape[1] <= 0:
+        print('Nothing detected')
+        return [[False for i in range(subSecNum)] for j in range(subSecNum)]
+    cv2.imshow('Cropped depthmap',crop_depthimg)
+    cv2.waitKey(1)
+
 
     meanVal = np.mean(crop_depthimg)
 
     # We get the Y grid pos of each object
-    yGridPos = math.floor(5*(meanVal/255))
+    yGridPos = math.floor(5*(meanVal/255.0)+0.001)
 
     # We get the X grid pos of each object        
-    normalizedCoord = convertIntoGrid(frameNormal,coord)
-    startXSec,endXSec = convertNormToXPos(frameNormal,normalizedCoord,5)
+    normalizedCoord = normalizeCoord(frameL,coord)
+    startXSec,endXSec = convertNormToXPos(frameL,normalizedCoord,5)
 
     for xGridPos in range(startXSec,endXSec):
         grid[yGridPos][xGridPos] = True    
@@ -106,9 +114,14 @@ def initalizeCatcher():
  
     right_matcher = cv2.ximgproc.createRightMatcher(left_matcher)
 
-    return left_matcher, right_matcher
 
-def getDepthMap(imgL,imgR):
+    wls_filter = cv2.ximgproc.createDisparityWLSFilter(matcher_left=left_matcher)
+    wls_filter.setLambda(lmbda)
+    wls_filter.setSigmaColor(sigma)
+
+    return left_matcher, right_matcher, wls_filter
+
+def getDepthMap(imgL,imgR,wls_filter):
     # Maybe comment this out will work
     imgL = cv2.cvtColor(imgL, cv2.COLOR_BGR2GRAY)
     imgR = cv2.cvtColor(imgR, cv2.COLOR_BGR2GRAY)
@@ -166,23 +179,26 @@ time.sleep(2.0)
 fps = FPS().start()
 
 # loop over the frames from the video stream
+loopCnt = 0
 while True:
+        grid = [[False for i in range(subSecNum)] for j in range(subSecNum)]
         begin = time.time()
         # grab the frame from the threaded video stream and resize it
         # to have a maximum width of 400 pixels
-        frame = vsL.read()
-        frameR = cvR.read()
+        frameL = vsL.read()
+        frameR = vsR.read()
 
-        if frame is None:
+        if frameL is None or frameR is None:
                 print('Skip')
                 continue
 
 
-        frame = imutils.resize(frame, width=400)
+        frameL = imutils.resize(frameL, width=400)
+        frameR = imutils.resize(frameR, width=400)
 
         # grab the frame dimensions and convert it to a blob
-        (h, w) = frame.shape[:2]
-        blob = cv2.dnn.blobFromImage(frame, 0.007843, (300, 300), 127.5)
+        (h, w) = frameL.shape[:2]
+        blob = cv2.dnn.blobFromImage(frameL, 0.007843, (300, 300), 127.5)
 
         # pass the blob through the network and obtain the detections and
         # predictions
@@ -190,10 +206,10 @@ while True:
         detections = net.forward()
 
 
-        left_matcher, right_matcher = initalizeCatcher()
+        left_matcher, right_matcher, wls_filter = initalizeCatcher()
 
         # Get depth
-        frameDepth = getDepthMap(imgL,imgR)
+        frameDepth = getDepthMap(frameL,frameR,wls_filter)
 
 
 
@@ -215,7 +231,8 @@ while True:
                         print('-------------------------------------------')
 
                         # Get the grid
-                        grid = convertCoordToEntireGrid(grid, frameNormal,frameDepth,(startX,startY,endX,endY))
+                        if loopCnt%skipFrameNum == 0:
+                            grid = convertCoordToEntireGrid(grid, frameL,frameDepth,(startX,startY,endX,endY))
 
 
 
@@ -227,15 +244,15 @@ while True:
                         # draw the prediction on the frame
                         label = "{}: {:.2f}%".format(CLASSES[idx],
                                 confidence * 100)
-                        cv2.rectangle(frame, (startX, startY), (endX, endY),
+                        cv2.rectangle(frameL, (startX, startY), (endX, endY),
                                 COLORS[idx], 2)
                         y = startY - 15 if startY - 15 > 15 else startY + 15
-                        cv2.putText(frame, label, (startX, y),
+                        cv2.putText(frameL, label, (startX, y),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, COLORS[idx], 2)
 
-
+        printGrid(grid)
         # show the output frame
-        cv2.imshow("Frame", frame)
+        cv2.imshow("Frame", frameL)
         key = cv2.waitKey(1) & 0xFF
 
         # if the `q` key was pressed, break from the loop
@@ -245,7 +262,7 @@ while True:
         # update the FPS counter
         fps.update()
         print('Time: ', (time.time()-begin))
-
+        loopCnt+= 0
 # stop the timer and display FPS information
 fps.stop()
 print("[INFO] elapsed time: {:.2f}".format(fps.elapsed()))
