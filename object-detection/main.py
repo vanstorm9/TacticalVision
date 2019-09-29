@@ -17,6 +17,10 @@ subSecNum = 5
 grid = [[False for i in range(subSecNum)] for j in range(subSecNum)]
 
 
+def printGrid(grid):
+    for row in grid:
+        print(row)
+    return
 
 def convertNormToXPos(frame,currDimPer,numOfSec=5):
     # Converts normalized coords to X pos
